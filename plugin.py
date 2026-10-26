@@ -18,8 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from maibot_sdk import EventHandler, LLMProvider, LLMProviderBase, MaiBotPlugin
-from maibot_sdk.types import EventType
+from maibot_sdk import Command, LLMProvider, LLMProviderBase, MaiBotPlugin
 
 try:  # 插件被作为包加载时走相对导入
     from .workbuddy.session import WorkBuddySession, resolve_master_key
@@ -288,52 +287,73 @@ class WorkBuddyPlugin(MaiBotPlugin):
         log.info("WorkBuddy 登录成功，凭据已加密保存")
         await self._reply("WorkBuddy 登录成功，凭据已加密保存，现在可以让模型用 workbuddy 了。", stream_id)
 
-    @EventHandler("wb_login", event_type=EventType.ON_MESSAGE, intercept_message=False, weight=90)
-    async def on_message(self, message: Any = None, **kwargs: Any) -> None:
+    @Command(
+        "wb_login",
+        description="获取 WorkBuddy 登录链接（仅管理员）",
+        pattern=r"^/wb\s+(?:login|登录)",
+    )
+    async def handle_wb_login(self, **kwargs: Any) -> str:
+        text = str(kwargs.get("text") or "")
+        stream_id = str(kwargs.get("stream_id") or "")
+        is_admin = bool(kwargs.get("is_local_operator"))
         log.info(
-            "WorkBuddy on_message 触发: type=%s kwargs=%s text=%r",
-            type(message).__name__,
-            sorted(kwargs.keys())[:8],
-            getattr(message, "plain_text", None),
+            "WorkBuddy /wb login 命中: text=%r admin=%s stream_id=%s user=%s",
+            text, is_admin, stream_id, kwargs.get("user_id"),
         )
-        try:
-            text = (getattr(message, "plain_text", "") or "").strip()
-            stream_id = getattr(message, "stream_id", "") or ""
-        except Exception:  # noqa: BLE001
-            return
-        low = text.lower()
-        if not (
-            low.startswith("/wb login")
-            or text.startswith("/wb 登录")
-            or low.startswith("/workbuddy login")
-        ):
-            return
-        if not stream_id:
-            log.warning("WorkBuddy /wb login 缺少 stream_id，无法回复")
-            return
-        session = self.provider.session()
-        try:
-            creds = await session.credentials()
-        except Exception:  # noqa: BLE001
-            creds = {}
-        if creds:
-            await self._reply(
-                "WorkBuddy 已登录。要换账号请先删除 data 目录下的 credentials.enc，再执行 /wb login。",
-                stream_id,
+        if not is_admin:
+            # 不硬拦：授权链接只会把「点击的人自己的 WorkBuddy 账号」绑上来，
+            # 不涉及已保存凭据的泄露。这里只留痕，方便排查谁发起过登录。
+            log.info(
+                "WorkBuddy /wb login 来自非 local_operator（user_id=%s），继续放行",
+                kwargs.get("user_id"),
             )
-            return
         try:
+            async def respond(msg: str) -> str:
+                """统一出口：能主动发就主动发，拿不到 stream_id 才退回返回值。"""
+                if stream_id:
+                    await self._reply(msg, stream_id)
+                    return ""
+                return msg
+
+            session = self.provider.session()
+            log.info("wb login: step=session ok data_dir=%s", DATA_DIR)
+
+            creds: dict = {}
+            try:
+                creds = await session.credentials()
+                log.info("wb login: step=credentials ok has_creds=%s keys=%s", bool(creds), sorted(creds)[:6])
+            except Exception as exc:  # noqa: BLE001
+                log.warning("wb login: step=credentials 异常 %s: %s", type(exc).__name__, exc)
+
+            if creds:
+                return await respond(
+                    "WorkBuddy 已登录。要换账号请先删除 data 目录下的 credentials.enc，再执行 /wb login。"
+                )
+
+            log.info("wb login: step=login_begin start")
             begin = await session.login_begin()
+            url = begin.get("authUrl") or ""
+            log.info("wb login: step=login_begin ok url=%s state=%s", url[:70], str(begin.get("state"))[:12])
+            if not url:
+                return await respond("WorkBuddy 登录请求没有返回授权链接，请稍后重试。")
+
+            if stream_id:
+                task = asyncio.create_task(self._finish_login(begin["state"], stream_id))
+                _LOGIN_TASKS.add(task)
+                task.add_done_callback(_LOGIN_TASKS.discard)
+                log.info("wb login: 已启动后台轮询任务")
+            return await respond(
+                "请在 10 分钟内在浏览器打开下面的链接完成 WorkBuddy 授权：\n" + url
+            )
         except Exception as exc:  # noqa: BLE001
-            await self._reply(f"WorkBuddy 获取登录链接失败：{exc}", stream_id)
-            return
-        await self._reply(
-            "WorkBuddy 登录：请在 10 分钟内在浏览器打开下面的链接完成授权\n" + begin["authUrl"],
-            stream_id,
-        )
-        task = asyncio.create_task(self._finish_login(begin["state"], stream_id))
-        _LOGIN_TASKS.add(task)
-        task.add_done_callback(_LOGIN_TASKS.discard)
+            log.exception("wb login 失败")
+            try:
+                if stream_id:
+                    await self._reply(f"WorkBuddy /wb login 出错：{type(exc).__name__}: {exc}", stream_id)
+                    return ""
+            except Exception:
+                pass
+            return f"WorkBuddy /wb login 出错：{type(exc).__name__}: {exc}"
 
     @LLMProvider(
         CLIENT_TYPE,

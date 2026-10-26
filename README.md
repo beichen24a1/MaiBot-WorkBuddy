@@ -63,13 +63,24 @@ python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
 
 ### 授权
 
-当前版本用仓库里的 `tools/wb_login.py` 完成一次性登录：
+在**任意会话**里发送：
+
+```
+/wb login
+```
+
+插件会回复一个 WorkBuddy 授权链接。在浏览器打开并同意后，插件在后台轮询，
+检测到授权完成就自动把凭据加密落盘，并回一条「登录成功」。
+
+> 链接只对**点击它的人自己的 WorkBuddy 账号**生效，不涉及已保存凭据的泄露。
+> 要换账号：先删除 `credentials.enc`，再发一次 `/wb login`。
+
+不便在聊天里操作时，也可以用脚本（效果相同）：
 
 ```bash
 python tools/wb_login.py
 ```
 
-它会打印一个授权链接，在浏览器打开并同意后，脚本自动轮询并把凭据加密落盘。
 凭据保存在：
 
 ```
@@ -77,8 +88,6 @@ instance/data/plugins/maibot-team.workbuddy/
   .workbuddy_master_key
   credentials.enc
 ```
-
-> 在聊天里执行 `/wb login` 的内置命令还在做，目前请用上面的脚本。
 
 ---
 

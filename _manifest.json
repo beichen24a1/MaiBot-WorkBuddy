@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "id": "github.beichen24a1.workbuddy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "name": "WorkBuddy 模型接入",
   "description": "把 WorkBuddy(CN) 账号的模型接入 MaiBot：插件内完成 OAuth 登录与 token 刷新，注册一个 LLM Provider，模型配置里把 client_type 指向它即可用 deepseek-v4.1-flash、glm、kimi 等模型。",
   "author": {
