@@ -1,0 +1,57 @@
+{
+  "manifest_version": 2,
+  "id": "com.beichen24a1.workbuddy",
+  "version": "0.1.0",
+  "name": "WorkBuddy 模型接入",
+  "description": "把 WorkBuddy(CN) 账号的模型接入 MaiBot：插件内完成 OAuth 登录与 token 刷新，注册一个 LLM Provider，模型配置里把 client_type 指向它即可用 deepseek-v4.1-flash、glm、kimi 等模型。",
+  "author": {
+    "name": "beichen24a1",
+    "url": "https://github.com/beichen24a1"
+  },
+  "license": "MIT",
+  "urls": {
+    "repository": "https://github.com/beichen24a1/MaiBot-WorkBuddy",
+    "homepage": "https://github.com/beichen24a1/MaiBot-WorkBuddy",
+    "issues": "https://github.com/beichen24a1/MaiBot-WorkBuddy/issues"
+  },
+  "host_application": {
+    "min_version": "1.3.0",
+    "max_version": "1.3.99"
+  },
+  "sdk": {
+    "min_version": "2.0.0",
+    "max_version": "2.99.99"
+  },
+  "dependencies": [
+    {
+      "type": "python_package",
+      "name": "aiohttp",
+      "version_spec": ">=3.9,<4"
+    },
+    {
+      "type": "python_package",
+      "name": "cryptography",
+      "version_spec": ">=41"
+    }
+  ],
+  "plugin_type": "provider",
+  "display": {
+    "icon": {
+      "type": "lucide",
+      "value": "sparkles"
+    }
+  },
+  "capabilities": ["send.text"],
+  "llm_providers": [
+    {
+      "client_type": "com.beichen24a1.workbuddy",
+      "name": "WorkBuddy (CN)",
+      "description": "通过 WorkBuddy 账号转发的 OpenAI 兼容模型通道",
+      "version": "1.0.0"
+    }
+  ],
+  "i18n": {
+    "default_locale": "zh-CN",
+    "supported_locales": ["zh-CN", "en-US"]
+  }
+}

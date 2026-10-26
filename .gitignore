@@ -1,0 +1,21 @@
+# 运行期数据（凭据、主密钥）绝不入库
+data/
+*.enc
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.uv-cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地配置
+config.toml
+config_back/
