@@ -238,15 +238,35 @@ class WorkBuddyProvider(LLMProviderBase):
             result["reasoning_content"] = reasoning
         tool_calls = message.get("tool_calls")
         if tool_calls:
-            result["tool_calls"] = [
-                {
-                    "call_id": tc.get("id") or f"call_{secrets.token_hex(8)}",
-                    "func_name": (tc.get("function") or {}).get("name") or "",
-                    "args": (tc.get("function") or {}).get("arguments") or "{}",
-                }
-                for tc in tool_calls
-                if isinstance(tc, dict)
-            ]
+            cleaned: list[dict[str, Any]] = []
+            for tc in tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                fn = tc.get("function") or {}
+                name = str(fn.get("name") or "").strip()
+                if not name:
+                    # 上游偶尔回不完整的 tool_call（缺 function.name），
+                    # 留着会让宿主解析失败并整条请求报错，所以直接丢弃。
+                    log.warning(
+                        "WorkBuddy: 上游返回的 tool_call 缺少 function.name，已跳过: %s",
+                        str(tc)[:200],
+                    )
+                    continue
+                cleaned.append(
+                    {
+                        # Host 用 deserialize_tool_calls_snapshot 解析：
+                        # 需要 OpenAI 形态（id + function.name/arguments），
+                        # 传 call_id/func_name/args 会让 function.name 为 None 而报错。
+                        "id": tc.get("id") or f"call_{secrets.token_hex(8)}",
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": fn.get("arguments") or "{}",
+                        },
+                    }
+                )
+            if cleaned:
+                result["tool_calls"] = cleaned
         return result
 
 
